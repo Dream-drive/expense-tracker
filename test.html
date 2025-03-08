@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Expense Tracker with Multi-Currency</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .category-badge {
+            padding: 5px 10px;
+            border-radius: 8px;
+            color: white;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+
+<script>
+    // Load Google Charts for Expense Visualization
+google.charts.load('current', { packages: ['corechart'] });
+google.charts.setOnLoadCallback(updateExpenseCharts);
+
+// =============== Expense Tracking Functions ===============
+
+// Initialize expenses array from localStorage
+let expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+const apiKey = '04a7249b239018478c703abd'; // Ensure API Key is valid
+const baseCurrency = 'GHS';
+let conversionRates = JSON.parse(localStorage.getItem("conversionRates")) || {};
+
+// Fetch live conversion rates and store them
+async function fetchConversionRates(retry = false) {
+    try {
+        console.log("Fetching currency conversion rates...");
+
+        const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/${baseCurrency}`);
+        const data = await response.json();
+
+        if (data.result === "success") {
+            conversionRates = data.conversion_rates;
+            localStorage.setItem("conversionRates", JSON.stringify(conversionRates));
+            console.log("✅ Conversion Rates Updated:", conversionRates);
+        } else {
+            throw new Error("Failed to fetch conversion rates.");
+        }
+    } catch (error) {
+        console.error("❌ Error fetching conversion rates:", error);
+
+        if (!retry) {
+            console.log("🔄 Retrying currency conversion fetch...");
+            setTimeout(() => fetchConversionRates(true), 2000); // Retry after 2 seconds
+        } else {
+            showToast("⚠️ Unable to fetch conversion rates. Try again later.", "danger");
+        }
+    }
+}
+
+// Ensure Rates Load Before Adding an Expense
+async function ensureConversionRates() {
+    if (!Object.keys(conversionRates).length) {
+        await fetchConversionRates();
+    }
+}
+
+// Function to add a new expense
+async function addExpense(event) {
+    event.preventDefault();
+    await ensureConversionRates(); // Ensure rates are available before proceeding
+
+    const name = document.getElementById('expenseName').value.trim();
+    const amount = parseFloat(document.getElementById('expenseAmount').value);
+    const currency = document.getElementById('expenseCurrency') ? document.getElementById('expenseCurrency').value : 'GHS';
+    const category = document.getElementById('expenseCategory').value;
+
+    if (!name || isNaN(amount) || amount <= 0) {
+        showToast('⚠️ Please enter valid expense details.', 'danger');
+        return;
+    }
+
+    if (!conversionRates[currency]) {
+        showToast("⚠️ Currency conversion rates not available. Try again later.", "danger");
+        return;
+    }
+
+    // Convert to GH₵
+    const convertedAmount = amount / conversionRates[currency];
+
+    const newExpense = {
+        id: Date.now(),
+        name,
+        amount,
+        currency,
+        category,
+        convertedAmount,
+        date: new Date().toISOString() // ✅ Ensure valid timestamp
+    };
+
+    expenses.push(newExpense);
+    localStorage.setItem('expenses', JSON.stringify(expenses));
+
+    updateExpenseUI();
+    document.getElementById('expenseForm').reset();
+
+    showToast("✅ Expense added successfully!", "success");
+}
+
+// Function to show Bootstrap Toast notifications
+function showToast(message, type = "danger") {
+    let toastEl = document.getElementById("expenseToast");
+    let toastBody = toastEl.querySelector(".toast-body");
+
+    toastBody.textContent = message;
+    toastEl.classList.remove("bg-danger", "bg-success");
+    toastEl.classList.add(type === "success" ? "bg-success" : "bg-danger");
+
+    let toast = new bootstrap.Toast(toastEl);
+    toast.show();
+}
+
+// Delay to allow other scripts to load before initializing
+window.onload = function () {
+    setTimeout(() => {
+        console.log("⏳ Initializing application...");
+        fetchConversionRates();
+        loadRecurringExpenses();
+        checkAndLogRecurringExpenses();
+        console.log("✅ Application initialized!");
+    }, 1000); // 1-second delay
+};
+
+</script>
+
+<script>
+    
+// =============== Expense Limits Handling ===============
+
+// Function to load saved limits from localStorage
+function loadLimits() {
+    const monthlyLimit = localStorage.getItem("monthlyLimit") || "";
+    const categoryLimits = JSON.parse(localStorage.getItem("categoryLimits")) || {};
+
+    document.getElementById("monthlyLimit").value = monthlyLimit;
+
+    // Populate category limit inputs
+    const categories = ["Food", "Transport", "Health", "Credit"];
+    const categoryLimitInputs = document.getElementById("categoryLimitInputs");
+    categoryLimitInputs.innerHTML = "";
+
+    categories.forEach(category => {
+        const inputDiv = document.createElement("div");
+        inputDiv.classList.add("mb-2");
+
+        inputDiv.innerHTML = `
+            <label class="form-label">${category}</label>
+            <input type="number" class="form-control category-limit" data-category="${category}" 
+                   placeholder="Set limit for ${category}" value="${categoryLimits[category] || ''}" min="0">
+        `;
+
+        categoryLimitInputs.appendChild(inputDiv);
+    });
+}
+
+// Function to save limits
+function saveLimits() {
+    const monthlyLimit = document.getElementById("monthlyLimit").value;
+    const categoryInputs = document.querySelectorAll(".category-limit");
+
+    let categoryLimits = {};
+    categoryInputs.forEach(input => {
+        const category = input.getAttribute("data-category");
+        const limit = parseFloat(input.value);
+        if (!isNaN(limit)) {
+            categoryLimits[category] = limit;
+        }
+    });
+
+    // Save to localStorage
+    localStorage.setItem("monthlyLimit", monthlyLimit);
+    localStorage.setItem("categoryLimits", JSON.stringify(categoryLimits));
+
+    showToast("✅ Expense limits saved successfully!", "success");
+}
+
+// Function to check limits and display warnings
+function checkLimits() {
+    const expenses = JSON.parse(localStorage.getItem("expenses")) || [];
+    const monthlyLimit = parseFloat(localStorage.getItem("monthlyLimit")) || 0;
+    const categoryLimits = JSON.parse(localStorage.getItem("categoryLimits")) || {};
+
+    let totalSpent = 0;
+    let categorySpent = {};
+    let warnings = [];
+
+    expenses.forEach(exp => {
+        totalSpent += parseFloat(exp.amount);
+        categorySpent[exp.category] = (categorySpent[exp.category] || 0) + parseFloat(exp.amount);
+    });
+
+    // Check monthly limit
+    if (monthlyLimit > 0 && totalSpent > monthlyLimit) {
+        warnings.push(`⚠️ You have exceeded your monthly budget cap of GH₵${monthlyLimit}!`);
+    }
+
+    // Check category limits
+    for (const category in categoryLimits) {
+        if (categorySpent[category] && categorySpent[category] > categoryLimits[category]) {
+            warnings.push(`⚠️ You have exceeded your ${category} budget of GH₵${categoryLimits[category]}!`);
+        }
+    }
+
+    // Display warnings
+    const warningDiv = document.getElementById("limitWarnings");
+    warningDiv.innerHTML = "";
+
+    if (warnings.length > 0) {
+        warnings.forEach(msg => {
+            const warningElement = document.createElement("div");
+            warningElement.classList.add("alert", "alert-warning", "mt-2");
+            warningElement.innerHTML = msg;
+            warningDiv.appendChild(warningElement);
+        });
+    }
+}
+
+// Function to show Bootstrap Toast notifications
+function showToast(message, type = "danger") {
+    let toastEl = document.getElementById("expenseToast");
+    let toastBody = toastEl.querySelector(".toast-body");
+
+    toastBody.textContent = message;
+    toastEl.classList.remove("bg-danger", "bg-success");
+    toastEl.classList.add(type === "success" ? "bg-success" : "bg-danger");
+
+    let toast = new bootstrap.Toast(toastEl);
+    toast.show();
+}
+
+// Initialize on page load
+window.onload = function () {
+    loadLimits(); 
+    setTimeout(checkLimits, 500); // Delay to allow other scripts to load
+    fetchConversionRates(); // Ensure currency rates are fetched properly
+};
+
+</script>
+
+
+<body class="container mt-4">
+
+    <h2 class="text-center">Expense Tracker (Multi-Currency)</h2>
+
+    <!-- Expense Form -->
+    <div class="mb-4">
+        <label for="expenseName" class="form-label">Expense Name:</label>
+        <input type="text" id="expenseName" class="form-control" placeholder="Enter expense name">
+
+        <label for="expenseAmount" class="form-label mt-2">Amount:</label>
+        <input type="number" id="expenseAmount" class="form-control" placeholder="Enter amount">
+
+        <label for="expenseCurrency" class="form-label mt-2">Currency:</label>
+        <select id="expenseCurrency" class="form-select">
+            <option value="USD">USD (US Dollar)</option>
+            <option value="EUR">EUR (Euro)</option>
+            <option value="GBP">GBP (British Pound)</option>
+            <option value="GHS" selected>GHS (Ghanaian Cedi)</option>
+            <option value="NGN">NGN (Nigerian Naira)</option>
+            <option value="CAD">CAD (Canadian Dollar)</option>
+            <option value="INR">INR (Indian Rupee)</option>
+            <option value="ZAR">ZAR (South African Rand)</option>
+            <option value="JPY">JPY (Japanese Yen)</option>
+        </select>
+
+        <label for="expenseCategory" class="form-label mt-2">Category:</label>
+        <select id="expenseCategory" class="form-select">
+            <option value="Food">Food</option>
+            <option value="Transport">Transport</option>
+            <option value="Rent">Rent</option>
+            <option value="Other">Other</option>
+        </select>
+
+        <button class="btn btn-primary mt-3" onclick="addExpense()">Add Expense</button>
+    </div>
+
+    <!-- Expense List -->
+    <h4>Expense Records:</h4>
+    <div id="expenseList"></div>
+
+    <script>
+        const expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+        const apiKey = '04a7249b239018478c703abd';
+        const baseCurrency = 'GHS';
+        let conversionRates = {};
+
+        // Fetch live conversion rates
+        async function fetchConversionRates() {
+            try {
+                const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/${baseCurrency}`);
+                const data = await response.json();
+                if (data.result === "success") {
+                    conversionRates = data.conversion_rates;
+                    console.log("Conversion Rates:", conversionRates);
+                } else {
+                    alert("Failed to fetch conversion rates.");
+                }
+            } catch (error) {
+                alert("Error fetching currency data.");
+                console.error(error);
+            }
+        }
+
+        // Display expenses
+        function displayExpenses() {
+            const expenseList = document.getElementById('expenseList');
+            expenseList.innerHTML = '';
+
+            if (expenses.length === 0) {
+                expenseList.innerHTML = '<p>No expenses recorded yet.</p>';
+                return;
+            }
+
+            expenses.forEach((expense, index) => {
+                expenseList.innerHTML += `
+                    <div class="d-flex justify-content-between align-items-center mt-2 border p-2">
+                        <div>
+                            <span class="category-badge" style="background-color: #007bff;">${expense.category}</span>
+                            ${expense.name} - ${expense.amount} ${expense.currency}
+                            <strong>(≈ GH₵${expense.convertedAmount.toFixed(2)})</strong>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="deleteExpense(${index})">Delete</button>
+                    </div>`;
+            });
+        }
+
+        // Add new expense
+        async function addExpense() {
+            const name = document.getElementById('expenseName').value.trim();
+            const amount = parseFloat(document.getElementById('expenseAmount').value);
+            const currency = document.getElementById('expenseCurrency').value;
+            const category = document.getElementById('expenseCategory').value;
+
+            if (!name || isNaN(amount) || amount <= 0) {
+                alert('Please enter valid expense details.');
+                return;
+            }
+
+            // Convert to GH₵ if needed
+            const convertedAmount = (conversionRates[currency]) 
+                ? amount / conversionRates[currency] 
+                : amount;
+
+            const newExpense = { name, amount, currency, category, convertedAmount };
+            expenses.push(newExpense);
+
+            // Save to localStorage
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+            displayExpenses();
+
+            // Clear form fields
+            document.getElementById('expenseName').value = '';
+            document.getElementById('expenseAmount').value = '';
+        }
+
+        // Delete expense
+        function deleteExpense(index) {
+            if (confirm('Are you sure you want to delete this expense?')) {
+                expenses.splice(index, 1);
+                localStorage.setItem('expenses', JSON.stringify(expenses));
+                displayExpenses();
+            }
+        }
+
+        // Initialize app
+        window.onload = async () => {
+            await fetchConversionRates();
+            displayExpenses();
+        };
+    </script>
+
+</body>
+
+</html>

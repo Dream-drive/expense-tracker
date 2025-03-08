@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+
+    <script>
+        // Load Google Charts
+google.charts.load('current', { packages: ['corechart'] });
+google.charts.setOnLoadCallback(updateCharts);
+
+// Save Expense Log Automatically
+function saveLog(expense) {
+    const logs = JSON.parse(localStorage.getItem('logs')) || [];
+    
+    // Create log entry from expense
+    const logEntry = {
+        name: expense.name,
+        category: expense.category,
+        amount: expense.amount,
+        timestamp: new Date().toLocaleString(),
+        type: 'expense'
+    };
+
+    logs.push(logEntry);
+    localStorage.setItem('logs', JSON.stringify(logs));
+
+    displayLogs();   // Update logs in UI
+    updateSummary(); // Update summary
+    updateCharts();  // Update charts
+}
+
+function displayLogs() {
+    let logs = JSON.parse(localStorage.getItem('logs')) || [];
+    let expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+
+    // Merge both logs and expenses
+    let allLogs = [...logs, ...expenses].reverse(); 
+
+    const manageLog = document.querySelector('#manageLog'); // Select Manage Log
+    manageLog.innerHTML = ''; // Clear previous logs
+
+    allLogs.forEach(log => {  
+        const listItem = document.createElement('li');
+        listItem.className = 'list-group-item';
+        listItem.innerHTML = `
+            <strong>${log.name}</strong> - ${log.category}: 
+            GH₵ ${parseFloat(log.amount).toFixed(2)} <br>
+            <small>${log.timestamp || new Date(log.date).toLocaleString()}</small>
+        `;
+        manageLog.appendChild(listItem);
+    });
+}
+
+// Update Expense Summary
+function updateSummary() {
+    const logs = JSON.parse(localStorage.getItem('logs')) || [];
+    const today = new Date().toDateString();
+    const startOfWeek = getStartOfWeek();
+    const startOfMonth = getStartOfMonth();
+
+    let todayTotal = 0;
+    let weekTotal = 0;
+    let monthTotal = 0;
+    const categoryTotals = {};
+
+    logs.forEach(log => {
+        if (log.type === 'expense') {
+            const logDate = new Date(log.timestamp);
+
+            // Check for Today
+            if (logDate.toDateString() === today) {
+                todayTotal += parseFloat(log.amount);
+            }
+
+            // Check for This Week
+            if (logDate >= startOfWeek) {
+                weekTotal += parseFloat(log.amount);
+            }
+
+            // Check for This Month
+            if (logDate >= startOfMonth) {
+                monthTotal += parseFloat(log.amount);
+
+                // Group by Category for Breakdown
+                if (!categoryTotals[log.category]) {
+                    categoryTotals[log.category] = 0;
+                }
+                categoryTotals[log.category] += parseFloat(log.amount);
+            }
+        }
+    });
+
+    // Update Summary UI
+    document.getElementById('todayTotal').textContent = todayTotal.toFixed(2);
+    document.getElementById('weekTotal').textContent = weekTotal.toFixed(2);
+    document.getElementById('monthTotal').textContent = monthTotal.toFixed(2);
+
+    // Update Monthly Breakdown UI
+    const categoryBreakdown = document.getElementById('categoryBreakdown');
+    categoryBreakdown.innerHTML = '';
+    Object.keys(categoryTotals).forEach(category => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item';
+        item.innerHTML = `${category}: GH₵ ${categoryTotals[category].toFixed(2)}`;
+        categoryBreakdown.appendChild(item);
+    });
+}
+
+// Utility Functions for Date Calculation
+function getStartOfWeek() {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    return new Date(now.setDate(now.getDate() - dayOfWeek));
+}
+
+function getStartOfMonth() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+
+
+
+
+
+// Update Expense Charts (Pie and Bar)
+function updateCharts() {
+    const logs = JSON.parse(localStorage.getItem('logs')) || [];
+    const currentMonth = new Date().getMonth();
+
+    // Prepare Data
+    const categoryData = {};
+    const monthlyData = {};
+
+    logs.forEach((log) => {
+        if (log.type === 'expense') {
+            // Category-wise (Pie Chart Data)
+            if (!categoryData[log.category]) {
+                categoryData[log.category] = 0;
+            }
+            categoryData[log.category] += parseFloat(log.amount);
+
+            // Monthly Trends (Bar Chart Data)
+            const logMonth = new Date(log.timestamp).getMonth();
+            if (logMonth === currentMonth) {
+                if (!monthlyData[log.name]) {
+                    monthlyData[log.name] = 0;
+                }
+                monthlyData[log.name] += parseFloat(log.amount);
+            }
+        }
+    });
+
+    // Draw Charts
+    drawPieChart(categoryData);
+    drawBarChart(monthlyData);
+}
+
+// Draw 3D Pie Chart (Category-Wise Distribution)
+function drawPieChart(categoryData) {
+    const data = new google.visualization.DataTable();
+    data.addColumn('string', 'Category');
+    data.addColumn('number', 'Amount');
+
+    for (const category in categoryData) {
+        data.addRow([category, categoryData[category]]);
+    }
+
+    const options = {
+        title: 'Category-Wise Expense Distribution',
+        is3D: true,
+        pieSliceText: 'label',
+        colors: ['#1E88E5', '#D32F2F', '#43A047', '#FB8C00', '#8E24AA'],
+    };
+
+    const chart = new google.visualization.PieChart(document.getElementById('expensePieChart'));
+    chart.draw(data, options);
+}
+
+// Draw Bar Chart (Monthly Expense Trends)
+function drawBarChart(monthlyData) {
+    const data = new google.visualization.DataTable();
+    data.addColumn('string', 'Item');
+    data.addColumn('number', 'Amount');
+
+    for (const item in monthlyData) {
+        data.addRow([item, monthlyData[item]]);
+    }
+
+    const options = {
+        title: 'Monthly Expense Trends',
+        hAxis: { title: 'Item' },
+        vAxis: { title: 'Amount (GH₵)' },
+        colors: ['#1B9E77'],
+        legend: { position: 'none' },
+    };
+
+    const chart = new google.visualization.ColumnChart(document.getElementById('expenseBarChart'));
+    chart.draw(data, options);
+}
+
+// Ensure charts resize on window resize
+window.addEventListener('resize', updateCharts);
+
+// Ensure UI Updates on Page Load
+document.addEventListener('DOMContentLoaded', () => {
+    displayLogs();    // Show last 5 expenses
+    updateSummary();  // Show expense summary
+    updateCharts();   // Show charts
+    updateMonthlyExpenditure(); // Update Total Expenditure
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+    const expenseForm = document.getElementById("expenseForm");
+    const monthlyTotalDisplay = document.getElementById("monthlyTotal");
+    const expenseLog = document.querySelector("#expenseLog ul");
+    const manageLog = document.querySelector("#manageLog");
+    const todayTotalDisplay = document.getElementById("todayTotal");
+    const weekTotalDisplay = document.getElementById("weekTotal");
+    const monthTotalDisplay = document.getElementById("monthTotal");
+    const categoryBreakdown = document.getElementById("categoryBreakdown");
+
+    let expenses = JSON.parse(localStorage.getItem("expenses")) || [];
+
+    // Function to update and display total monthly expenditure
+    function updateMonthlyTotal() {
+        let total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+        monthlyTotalDisplay.textContent = total.toFixed(2);
+    }
+
+    // Function to display expenses in logs
+    function displayExpenses() {
+        expenseLog.innerHTML = ""; // Clear the Expense Log
+        manageLog.innerHTML = ""; // Clear the Manage Log
+
+        let recentExpenses = [...expenses].reverse().slice(0, 5); // Get latest 5 expenses
+
+        // Display recent 5 expenses in Expense Log
+        recentExpenses.forEach(expense => {
+            const li = document.createElement("li");
+            li.classList.add("list-group-item");
+            li.innerHTML = `
+                <strong>${expense.name}</strong> - GH₵ ${expense.amount.toFixed(2)} 
+                <span class="badge bg-primary">${expense.category}</span>
+                <small class="text-muted">(${new Date(expense.date).toLocaleDateString()})</small>
+            `;
+            expenseLog.appendChild(li);
+        });
+
+       
+    }
+
+    // Function to update summary (Today, Week, Month totals)
+    function updateSummary() {
+        const today = new Date().toISOString().split("T")[0]; // Get today's date (YYYY-MM-DD)
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - 7); // 7 days ago
+
+        let todayTotal = 0, weekTotal = 0, monthTotal = 0;
+        let categoryTotals = {};
+
+        expenses.forEach(expense => {
+            const expenseDate = new Date(expense.date).toISOString().split("T")[0];
+
+            // Categorize expenses
+            if (!categoryTotals[expense.category]) {
+                categoryTotals[expense.category] = 0;
+            }
+            categoryTotals[expense.category] += expense.amount;
+
+            // Calculate totals
+            if (expenseDate === today) {
+                todayTotal += expense.amount;
+            }
+            if (new Date(expense.date) >= weekStart) {
+                weekTotal += expense.amount;
+            }
+            monthTotal += expense.amount;
+        });
+
+        // Update summary display
+        todayTotalDisplay.textContent = todayTotal.toFixed(2);
+        weekTotalDisplay.textContent = weekTotal.toFixed(2);
+        monthTotalDisplay.textContent = monthTotal.toFixed(2);
+
+        // Update category breakdown
+        categoryBreakdown.innerHTML = "";
+        for (let category in categoryTotals) {
+            let li = document.createElement("li");
+            li.classList.add("list-group-item");
+            li.innerHTML = `<strong>${category}:</strong> GH₵ ${categoryTotals[category].toFixed(2)}`;
+            categoryBreakdown.appendChild(li);
+        }
+    }
+
+    // Function to edit an expense
+    window.editExpense = function (id) {
+        let expense = expenses.find(exp => exp.id === id);
+        if (expense) {
+            // Populate form with existing values
+            document.getElementById("expenseName").value = expense.name;
+            document.getElementById("expenseAmount").value = expense.amount;
+            document.getElementById("expenseCategory").value = expense.category;
+
+            // Remove the old expense entry
+            expenses = expenses.filter(exp => exp.id !== id);
+            localStorage.setItem("expenses", JSON.stringify(expenses));
+
+            // Refresh the UI
+            updateMonthlyTotal();
+            displayExpenses();
+            updateSummary();
+        }
+    };
+
+    // Function to delete an expense
+    window.deleteExpense = function (id) {
+        if (confirm("Are you sure you want to delete this expense?")) {
+            expenses = expenses.filter(exp => exp.id !== id);
+            localStorage.setItem("expenses", JSON.stringify(expenses));
+
+            // Refresh the UI
+            updateMonthlyTotal();
+            displayExpenses();
+            updateSummary();
+        }
+    };
+
+    // Handle Expense Form Submission
+    expenseForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+
+        const expenseName = document.getElementById("expenseName").value.trim();
+        const expenseAmount = parseFloat(document.getElementById("expenseAmount").value);
+        const expenseCategory = document.getElementById("expenseCategory").value;
+        const expenseDate = new Date();
+
+        if (expenseName && !isNaN(expenseAmount) && expenseCategory) {
+            const newExpense = {
+                id: Date.now(),
+                name: expenseName,
+                amount: expenseAmount,
+                category: expenseCategory,
+                date: expenseDate.toISOString()
+            };
+
+            expenses.push(newExpense);
+            localStorage.setItem("expenses", JSON.stringify(expenses));
+
+            saveLog(newExpense); // Automatically save to Manage Logs
+
+            updateMonthlyTotal();
+            displayExpenses();
+            updateSummary();
+            expenseForm.reset();
+        }
+    });
+
+    // Initialize Data on Page Load
+    updateMonthlyTotal();
+    displayExpenses();
+    updateSummary();
+});
+
+
+
+    </script>
+    
+</body>
+</html>

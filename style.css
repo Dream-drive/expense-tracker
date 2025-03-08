@@ -1,0 +1,96 @@
+body {
+    background: url('https://www.svgrepo.com/show/429131/wave.svg') no-repeat center center/cover;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 900px;
+}
+
+/* Sidebar */
+#sidebar {
+    position: fixed;
+    left: -300px;
+    top: 0;
+    width: 300px;
+    height: 100%;
+    background: #343a40;
+    color: white;
+    padding-top: 60px;
+    transition: left 0.4s ease;
+    z-index: 1050;
+}
+
+#sidebar.active {
+    left: 0;
+}
+
+#sidebar a {
+    padding: 15px 20px;
+    display: block;
+    color: gold;
+    text-decoration: none;
+}
+
+#sidebar a.close {
+    color: white;
+}
+
+#sidebar a:hover {
+    background: #495057;
+}
+
+.viewport {
+    display: none;
+}
+
+.active {
+    display: block;
+}
+
+.card {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.log-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.timestamp {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.btn-small {
+    padding: 0.2rem 0.5rem;
+}
+
+.chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 600px; /* Limits size on large screens */
+    margin: auto; /* Centers the chart */
+}
+
+@media (max-width: 768px) {
+    .chart-container {
+        max-width: 100%; /* Ensures full width on smaller screens */
+    }
+}
+
+
+
+/* Warning Messages */
+.warning {
+padding: 10px;
+margin-top: 10px;
+border-radius: 8px;
+color: white;
+background: #dc3545; /* Bootstrap danger color */
+}
+
+
