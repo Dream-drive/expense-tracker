@@ -92,6 +92,8 @@
 
 
 
+
+
         <!-- Expense Section -->
         <div id="expenses">
             <div class="card p-4 mb-4">
@@ -178,6 +180,39 @@
         </div>
 
 
+
+
+<!-- 🔍 Filtering & Search -->
+<div id="expenseFilters" class="mb-4">
+    <h4>🔍 Filter & Search</h4>
+
+    <!-- Date Filter -->
+    <label for="dateFilter" class="form-label">Filter by Date:</label>
+    <select id="dateFilter" class="form-control" onchange="applyFilters()">
+        <option value="all">All</option>
+        <option value="day">Today</option>
+        <option value="week">This Week</option>
+        <option value="month">This Month</option>
+        <option value="year">This Year</option>
+    </select>
+
+    <!-- Category Filter -->
+    <label for="categoryFilter" class="form-label mt-2">Filter by Category:</label>
+    <select id="categoryFilter" class="form-control" onchange="applyFilters()">
+        <option value="all">All</option>
+        <option value="Food">Food</option>
+        <option value="Transport">Transport</option>
+        <option value="Health">Health</option>
+        <option value="Credit">Credit</option>
+    </select>
+
+    <!-- Keyword Search -->
+    <label for="searchKeyword" class="form-label mt-2">Search by Name:</label>
+    <input type="text" id="searchKeyword" class="form-control" placeholder="Enter expense name" oninput="applyFilters()">
+</div>
+
+
+<br><br><br>
         
         <!-- Expense Limits Section -->
         <div id="expenseLimits">

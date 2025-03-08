@@ -852,5 +852,77 @@ window.onload = function () {
 };
 
 
+
+window.applyFilters = function () {
+    console.log("🔍 applyFilters() called"); // Debugging log
+
+    let dateFilter = document.getElementById("dateFilter").value;
+    let categoryFilter = document.getElementById("categoryFilter").value;
+    let searchKeyword = document.getElementById("searchKeyword").value.toLowerCase();
+
+    console.log("📅 Date Filter:", dateFilter);
+    console.log("📂 Category Filter:", categoryFilter);
+    console.log("🔎 Search Keyword:", searchKeyword);
+
+    let today = new Date();
+    let startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Start of the week (Sunday)
+    
+    let startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    let startOfYear = new Date(today.getFullYear(), 0, 1);
+
+    let expenses = JSON.parse(localStorage.getItem("expenses")) || [];
+    console.log("📊 Total Expenses Before Filter:", expenses.length);
+
+    if (!Array.isArray(expenses)) {
+        console.error("🚨 Error: 'expenses' is not an array!", expenses);
+        return;
+    }
+
+    // Apply Filters
+    let filteredExpenses = expenses.filter(expense => {
+        let expenseDate = new Date(expense.date);
+
+        // Filter by Date
+        if (dateFilter === "day" && expenseDate.toDateString() !== today.toDateString()) return false;
+        if (dateFilter === "week" && expenseDate < startOfWeek) return false;
+        if (dateFilter === "month" && expenseDate < startOfMonth) return false;
+        if (dateFilter === "year" && expenseDate < startOfYear) return false;
+
+        // Filter by Category
+        if (categoryFilter !== "all" && expense.category !== categoryFilter) return false;
+
+        // Filter by Search Keyword
+        if (searchKeyword && !expense.name.toLowerCase().includes(searchKeyword)) return false;
+
+        return true;
+    });
+
+    console.log("✅ Filtered Expenses Count:", filteredExpenses.length);
+
+    // Clear logs before displaying
+    document.getElementById("expenseLog").innerHTML = "";
+    document.getElementById("manageLog").innerHTML = "";
+
+    // Display Filtered Expenses
+    filteredExpenses.slice().reverse().forEach(expense => {
+        const listItem = document.createElement("li");
+        listItem.className = "list-group-item";
+        listItem.innerHTML = `
+            <strong>${expense.name}</strong> - GH₵ ${parseFloat(expense.amount).toFixed(2)} 
+            <span class="badge bg-primary">${expense.category}</span>
+            <small class="text-muted">(${expense.date ? new Date(expense.date).toLocaleDateString() : 'No Date'})</small>
+            <button class="btn btn-warning btn-sm" onclick="editExpense(${expense.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteExpense(${expense.id})">Delete</button>
+        `;
+        document.getElementById("manageLog").appendChild(listItem);
+    });
+};
+
+
+
+
+
+
 };
 
